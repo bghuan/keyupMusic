@@ -7,18 +7,24 @@ public partial class Form1 : Form
 {
     KeyEventHandler myKeyEventHandeler;
     KeyboardHook k_hook = new KeyboardHook();
-    SoundPlayer player = new SoundPlayer("e.wav");
+    SoundPlayer player = new SoundPlayer();
     bool in_limit_second = false;
-    int limit_second = 10000;
     bool in_limit_second2 = false;
+    int limit_second = 10000;
 
     public Form1()
     {
         InitializeComponent();
         startListen();
+        this.Load += new EventHandler(Form1_Load);
     }
 
-    //前次的定时恢复会影响到后次的重定时
+    private void Form1_Load(object sender, EventArgs e)
+    {
+        this.WindowState = FormWindowState.Minimized;
+        SetVisibleCore(false);
+    }
+
     private void hook_KeyUp(object sender, KeyEventArgs e)
     {
         if (e.KeyCode.Equals(Keys.LWin) && !in_limit_second)
@@ -53,6 +59,7 @@ public partial class Form1 : Form
         }
     }
 
+    //前次的定时恢复会影响到后次的重定时
     public void time()
     {
         Timer timer = new Timer(limit_second);
