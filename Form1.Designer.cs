@@ -1,4 +1,4 @@
-﻿namespace asdd;
+﻿namespace keyupMusic;
 
 partial class Form1
 {

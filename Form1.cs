@@ -1,4 +1,4 @@
-namespace asdd;
+namespace keyupMusic;
 using KeyboardHook;
 using System.Timers;
 using System.Media;
@@ -11,6 +11,9 @@ public partial class Form1 : Form
     bool in_limit_second = false;
     bool in_limit_second2 = false;
     int limit_second = 10000;
+
+    Keys key1 = Keys.LWin;
+    Keys key2 = Keys.Oemtilde;
 
     public Form1()
     {
@@ -27,7 +30,7 @@ public partial class Form1 : Form
 
     private void hook_KeyUp(object sender, KeyEventArgs e)
     {
-        if (e.KeyCode.Equals(Keys.LWin) && !in_limit_second)
+        if (e.KeyCode.Equals(key1) && !in_limit_second)
         {
             try
             {
@@ -39,7 +42,7 @@ public partial class Form1 : Form
             }
             catch (Exception) { }
         }
-        else if (e.KeyCode.Equals(Keys.CapsLock) && !in_limit_second2)
+        else if (e.KeyCode.Equals(key2) && !in_limit_second2)
         {
             try
             {

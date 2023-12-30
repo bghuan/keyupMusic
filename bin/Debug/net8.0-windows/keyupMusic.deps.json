@@ -6,15 +6,15 @@
   "compilationOptions": {},
   "targets": {
     ".NETCoreApp,Version=v8.0": {
-      "asdd/1.0.0": {
+      "keyupMusic/1.0.0": {
         "runtime": {
-          "asdd.dll": {}
+          "keyupMusic.dll": {}
         }
       }
     }
   },
   "libraries": {
-    "asdd/1.0.0": {
+    "keyupMusic/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

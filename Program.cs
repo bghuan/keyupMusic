@@ -1,4 +1,4 @@
-namespace asdd;
+namespace keyupMusic;
 
 static class Program
 {
