@@ -1,6 +1,5 @@
 namespace keyupMusic;
 using KeyboardHook;
-using System.Timers;
 using System.Media;
 
 public partial class Form1 : Form
@@ -8,12 +7,9 @@ public partial class Form1 : Form
     KeyEventHandler myKeyEventHandeler;
     KeyboardHook k_hook = new KeyboardHook();
     SoundPlayer player = new SoundPlayer();
-    bool in_limit_second = false;
-    bool in_limit_second2 = false;
-    int limit_second = 10000;
-
-    Keys key1 = Keys.LWin;
-    Keys key2 = Keys.Oemtilde;
+    Keys[] keys = { Keys.D0, Keys.D1, Keys.D2, Keys.D3, Keys.D4, Keys.D5, Keys.D6, Keys.D7, Keys.D8, Keys.D9 };
+    Keys[] keys_stop = { Keys.Escape };
+    DateTime dateTime = new DateTime(2000, 1, 1);
 
     public Form1()
     {
@@ -30,52 +26,27 @@ public partial class Form1 : Form
 
     private void hook_KeyUp(object sender, KeyEventArgs e)
     {
-        if (e.KeyCode.Equals(key1) && !in_limit_second)
+        if (keys.Contains(e.KeyCode))
         {
-            try
-            {
-                player = new SoundPlayer("e.wav");
-                player.Play();
-                in_limit_second = true;
-                in_limit_second2 = false;
-                time();
-            }
-            catch (Exception) { }
+            string wav = e.KeyCode.ToString().Replace("D", "") + ".wav";
+
+            if (DateTime.Now - dateTime < TimeSpan.FromSeconds(10)) return;
+            if (!File.Exists(wav)) return;
+
+            player = new SoundPlayer(wav);
+            player.Play();
+
+            dateTime = DateTime.Now;
+
+            //winBinWallpaper.changeImg();
         }
-        else if (e.KeyCode.Equals(key2) && !in_limit_second2)
-        {
-            try
-            {
-                player = new SoundPlayer("c.wav");
-                player.Play();
-                in_limit_second = false;
-                in_limit_second2 = true;
-                time();
-            }
-            catch (Exception) { }
-        }
-        else if (e.KeyCode.Equals(Keys.Escape))
+        else if (keys_stop.Contains(e.KeyCode))
         {
             player.Stop();
-            in_limit_second = false;
-            in_limit_second2 = false;
+            dateTime = new DateTime(2000, 1, 1);
         }
     }
 
-    //前次的定时恢复会影响到后次的重定时
-    public void time()
-    {
-        Timer timer = new Timer(limit_second);
-        timer.AutoReset = false;
-        timer.Enabled = true;
-        timer.Elapsed += new ElapsedEventHandler(release_limit_second);
-        timer.Start();
-    }
-    public void release_limit_second(object source, System.Timers.ElapsedEventArgs e)
-    {
-        in_limit_second = false;
-        in_limit_second2 = false;
-    }
     public void startListen()
     {
         var myKeyEventHandeler = new KeyEventHandler(hook_KeyUp);
