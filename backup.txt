@@ -1,0 +1,1157 @@
+namespace keyupMusic;
+using KeyboardHook;
+using System.Media;
+using System.Runtime.InteropServices;
+
+public partial class Form1 : Form
+{
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RAWINPUT
+    {
+        public RAWINPUTHEADER header;
+
+        // 这里添加其他可能的输入类型，例如键盘、鼠标等
+        // 对于键盘输入，你可能需要添加RAWKEYBOARD结构体的字段
+        // 对于鼠标输入，你可能需要添加RAWMOUSE结构体的字段
+
+        // 示例：键盘输入
+        [StructLayout(LayoutKind.Explicit)]
+        public struct RAWKEYBOARD
+        {
+            [FieldOffset(0)] public ushort MakeCode;
+            [FieldOffset(2)] public ushort Flags;
+            [FieldOffset(4)] public ushort Reserved;
+            [FieldOffset(6)] public ushort VKey;
+            [FieldOffset(8)] public uint Message;
+            [FieldOffset(12)] public IntPtr ExtraInformation;
+        }
+
+        // 你可能需要根据实际情况来包含RAWKEYBOARD结构体
+        // public RAWKEYBOARD keyboard;
+
+        // ... 其他可能的输入类型
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RAWINPUTHEADER
+    {
+        public uint dwType;
+        public uint dwSize;
+        public IntPtr hDevice;
+        public IntPtr wParam;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RawInputDevice
+    {
+        public ushort usUsagePage;
+        public ushort usUsage;
+        public int dwFlags;
+        public IntPtr hwndTarget;
+    }
+
+    // // RAWINPUTHEADER结构体的定义
+    // [StructLayout(LayoutKind.Sequential)]
+    // public struct RAWINPUTHEADER
+    // {
+    //     public uint dwType;
+    //     public uint dwSize;
+    //     public IntPtr hDevice;
+    //     public IntPtr wParam;
+    // }
+
+    // RAWKEYBOARD结构体的定义（键盘输入）
+    [StructLayout(LayoutKind.Explicit)]
+    public struct RAWKEYBOARD
+    {
+        [FieldOffset(0)]
+        public RAWKEYBOARDHEADER header;
+
+        // ... 其他字段，如MakeCode, Flags, Reserved, VKey, Message等
+    }
+
+    // RAWKEYBOARDHEADER结构体的定义（键盘输入头）
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RAWKEYBOARDHEADER
+    {
+        public ushort bVKey;
+        public ushort wScan;
+        public uint dwFlags;
+        public uint dwReserved;
+        public ushort wTime;
+        public ushort dwExtraInfo;
+    }
+
+    // ... 类似地，定义RAWMOUSE等结构体
+
+    // Raw Input API函数的签名
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern uint RegisterRawInputDevices(RawInputDevice[] pRawInputDevices, uint uiNumDevices, uint cbSize);
+
+    // ... 其他Raw Input API函数的签名
+    private void RegisterRawInputDevicesForKeyboardAndMouse()
+    {
+        // 创建两个RAWINPUTDEVICE实例，一个用于键盘，一个用于鼠标
+        var keyboardDevice = new RawInputDevice
+        {
+            usUsagePage = 0x01, // HID_USAGE_PAGE_GENERIC
+            usUsage = 0x06,     // HID_USAGE_GENERIC_KEYBOARD
+            dwFlags = 0x100,    // RIDEV_INPUTSINK
+            hwndTarget = this.Handle // 指向你的窗口句柄
+        };
+
+        var mouseDevice = new RawInputDevice
+        {
+            usUsagePage = 0x01, // HID_USAGE_PAGE_GENERIC
+            usUsage = 0x02,     // HID_USAGE_GENERIC_MOUSE
+            dwFlags = 0x100,    // RIDEV_INPUTSINK
+            hwndTarget = this.Handle // 指向你的窗口句柄
+        };
+
+        // var devices = new RawInputDevice[] { keyboardDevice, mouseDevice };
+        var devices = new RawInputDevice[] { keyboardDevice };
+        var result = RegisterRawInputDevices(devices, (uint)devices.Length, (uint)Marshal.SizeOf(keyboardDevice));
+        if (result == 0)
+        {
+            // 处理错误
+            var error = Marshal.GetLastWin32Error();
+            // ...
+        }
+    }
+
+    // 处理WM_INPUT消息以获取原始输入数据
+    protected override void WndProc(ref Message m)
+    {
+        const int WM_INPUT = 0x00FF;
+        if (m.Msg == WM_INPUT)
+        {
+            // 获取原始输入数据的大小
+            uint dataSize = 0;
+            GetRawInputData(m.LParam, RID_INPUT, IntPtr.Zero, out dataSize, (uint)Marshal.SizeOf(typeof(RAWINPUTHEADER)));
+
+            // 分配内存来保存原始输入数据
+            IntPtr buffer = Marshal.AllocHGlobal((int)dataSize);
+            try
+            {
+                // 获取原始输入数据
+                uint result = GetRawInputData(m.LParam, RID_INPUT, buffer, out dataSize, (uint)Marshal.SizeOf(typeof(RAWINPUTHEADER)));
+                if (result == dataSize)
+                {
+                    // 将数据转换为RAWINPUT结构体
+                    RAWINPUT rawInput = (RAWINPUT)Marshal.PtrToStructure(buffer, typeof(RAWINPUT));
+
+                    // 检查是否是键盘输入
+                    if (rawInput.header.dwType == RIM_TYPEKEYBOARD)
+                    {
+                        // 提取键盘按键的虚拟键代码（VKey）
+                        ushort vKey = rawInput.keyboard.VKey;
+                        Console.WriteLine($"Keyboard VKey: {vKey}");
+
+                        // 你可以将vKey转换为实际的按键名称，但这需要一个映射表或方法
+                        // 例如，你可以使用Keys枚举中的值进行匹配（但请注意，并非所有vKey都直接对应于Keys枚举中的值）
+                    }
+                }
+                else
+                {
+                    // 处理错误
+                }
+            }
+            finally
+            {
+                // 释放内存
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+        base.WndProc(ref m);
+    }
+
+    // 导入必要的常量
+    [DllImport("user32.dll")]
+    private static extern uint GetRawInputData(IntPtr hRawInput, uint uiCommand, IntPtr pData, out uint pcbSize, uint cbSizeHeader);
+
+    private const int RID_INPUT = 0x1007;
+    private const int RIM_TYPEKEYBOARD = 1;
+    KeyEventHandler myKeyEventHandeler;
+    KeyboardHook k_hook = new KeyboardHook();
+    SoundPlayer player = new SoundPlayer();
+    Keys[] keys = { Keys.D0, Keys.D1, Keys.D2, Keys.D3, Keys.D4, Keys.D5, Keys.D6, Keys.D7, Keys.D8, Keys.D9 };
+    Keys[] keys_stop = { Keys.Escape };
+    Keys[] keys_exit = { Keys.D9, Keys.D9, Keys.D0 };
+    static string keys_exits = "990";
+    static string keys_exitsss = "990";
+    static bool keys_exitss = false;
+    DateTime dateTime = new DateTime(2000, 1, 1);
+
+    public Form1()
+    {
+        InitializeComponent();
+        startListen();
+        this.Load += new EventHandler(Form1_Load);
+        RegisterRawInputDevicesForKeyboardAndMouse();
+    }
+
+    private void Form1_Load(object sender, EventArgs e)
+    {
+        this.WindowState = FormWindowState.Minimized;
+        SetVisibleCore(false);
+    }
+
+    private void hook_KeyUp(object sender, KeyEventArgs e)
+    {
+        if (keys_exit.Contains(e.KeyCode) && is_exit(e.KeyCode))
+        {
+            if (keys_exitss)
+            {
+                player.Stop();
+                dateTime = new DateTime(2100, 1, 1);
+            }
+            else
+            {
+                dateTime = new DateTime(2000, 1, 1);
+            }
+        }
+        if (keys.Contains(e.KeyCode))
+        {
+            // pagedown_edge.yo(sender, e);
+            string wav = e.KeyCode.ToString().Replace("D", "") + ".wav";
+
+            if (DateTime.Now - dateTime < TimeSpan.FromSeconds(30)) return;
+            if (!File.Exists(wav)) return;
+
+            player = new SoundPlayer(wav);
+            player.Play();
+
+            dateTime = DateTime.Now;
+
+            new Thread(new ThreadStart(winBinWallpaper.changeImg)).Start();
+            // winBinWallpaper.changeImg();
+        }
+        else if (keys_stop.Contains(e.KeyCode) && dateTime < new DateTime(2099, 1, 1))
+        {
+            player.Stop();
+            dateTime = new DateTime(2000, 1, 1);
+        }
+    }
+    public static bool is_exit(Keys keys)
+    {
+        string number = keys.ToString().Replace("D", "");
+        keys_exitsss = (keys_exitsss + number).Substring(1, keys_exitsss.Length);
+        if (keys_exits == keys_exitsss)
+        {
+            keys_exitss = !keys_exitss;
+            return true;
+        }
+        return false;
+    }
+
+    public void startListen()
+    {
+        myKeyEventHandeler = new KeyEventHandler(hook_KeyUp);
+        k_hook.KeyUpEvent += myKeyEventHandeler;
+        k_hook.Start();
+    }
+    public void stopListen()
+    {
+        if (myKeyEventHandeler != null)
+        {
+            k_hook.KeyUpEvent -= myKeyEventHandeler;
+            myKeyEventHandeler = null;
+            k_hook.Stop();
+        }
+    }
+    protected override void Dispose(bool disposing)
+    {
+        stopListen();
+
+        if (disposing && (components != null))
+        {
+            components.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+}
+
+
+
+
+
+
+
+
+
+namespace keyupMusic;
+using KeyboardHook;
+using System.Media;
+using System.Runtime.InteropServices;
+
+public partial class Form1 : Form
+{
+    private const int RID_INPUT = 0x1007;
+    private const int RIM_TYPEKEYBOARD = 1;
+    KeyEventHandler myKeyEventHandeler;
+    KeyEventHandler myKeyEventHandeler_down;
+    KeyboardHook k_hook = new KeyboardHook();
+    SoundPlayer player = new SoundPlayer();
+    SoundPlayer player_d = new SoundPlayer("d.wav");
+    Keys[] keys = { Keys.D0, Keys.D1, Keys.D2, Keys.D3, Keys.D4, Keys.D5, Keys.D6, Keys.D7, Keys.D8, Keys.D9 };
+    Keys[] keys_stop = { Keys.Escape };
+    Keys[] keys_exit = { Keys.D9, Keys.D9, Keys.D0 };
+    string keys_exits = "990";
+    string keys_exitsss = "990";
+    bool keys_exitss = false;
+    DateTime dateTime = new DateTime(2000, 1, 1);
+
+    public Form1()
+    {
+        InitializeComponent();
+        startListen();
+        this.Load += new EventHandler(Form1_Load);
+        RegisterRawInputDevicesForKeyboardAndMouse();
+    }
+
+    private void Form1_Load(object sender, EventArgs e)
+    {
+        this.WindowState = FormWindowState.Minimized;
+        SetVisibleCore(false);
+    }
+
+    private void hook_KeyUp(object sender, KeyEventArgs e)
+    {
+        if (keys_exit.Contains(e.KeyCode) && is_exit(e.KeyCode))
+        {
+            if (keys_exitss)
+            {
+                player.Stop();
+                dateTime = new DateTime(2100, 1, 1);
+            }
+            else
+            {
+                dateTime = new DateTime(2000, 1, 1);
+            }
+        }
+        if (keys.Contains(e.KeyCode))
+        {
+            // pagedown_edge.yo(sender, e);
+            string wav = e.KeyCode.ToString().Replace("D", "") + ".wav";
+
+            if (DateTime.Now - dateTime < TimeSpan.FromSeconds(30)) return;
+            if (!File.Exists(wav)) return;
+
+            player = new SoundPlayer(wav);
+            player.Play();
+
+            dateTime = DateTime.Now;
+
+            new Thread(new ThreadStart(winBinWallpaper.changeImg)).Start();
+            // winBinWallpaper.changeImg();
+        }
+        else if (keys_stop.Contains(e.KeyCode) && dateTime < new DateTime(2099, 1, 1))
+        {
+            player.Stop();
+            dateTime = new DateTime(2000, 1, 1);
+        }
+    }
+    private void hook_KeyDown(object sender, KeyEventArgs e)
+    {
+        player_d.Play();
+    }
+    public bool is_exit(Keys keys)
+    {
+        string number = keys.ToString().Replace("D", "");
+        keys_exitsss = (keys_exitsss + number).Substring(1, keys_exitsss.Length);
+        if (keys_exits == keys_exitsss)
+        {
+            keys_exitss = !keys_exitss;
+            return true;
+        }
+        return false;
+    }
+
+    public void startListen()
+    {
+        myKeyEventHandeler = new KeyEventHandler(hook_KeyUp);
+        myKeyEventHandeler_down = new KeyEventHandler(hook_KeyDown);
+        k_hook.KeyUpEvent += myKeyEventHandeler;
+        k_hook.KeyDownEvent += myKeyEventHandeler_down;
+        k_hook.Start();
+    }
+    public void stopListen()
+    {
+        if (myKeyEventHandeler != null)
+        {
+            k_hook.KeyUpEvent -= myKeyEventHandeler;
+            k_hook.KeyDownEvent -= myKeyEventHandeler_down;
+            myKeyEventHandeler = null;
+            k_hook.Stop();
+        }
+    }
+    protected override void Dispose(bool disposing)
+    {
+        stopListen();
+
+        if (disposing && (components != null))
+        {
+            components.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+
+
+
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RAWINPUT
+    {
+        public RAWINPUTHEADER header;
+
+        // 这里添加其他可能的输入类型，例如键盘、鼠标等
+        // 对于键盘输入，你可能需要添加RAWKEYBOARD结构体的字段
+        // 对于鼠标输入，你可能需要添加RAWMOUSE结构体的字段
+
+        // 示例：键盘输入
+        [StructLayout(LayoutKind.Explicit)]
+        public struct RAWKEYBOARD
+        {
+            [FieldOffset(0)] public ushort MakeCode;
+            [FieldOffset(2)] public ushort Flags;
+            [FieldOffset(4)] public ushort Reserved;
+            [FieldOffset(6)] public ushort VKey;
+            [FieldOffset(8)] public uint Message;
+            [FieldOffset(12)] public IntPtr ExtraInformation;
+        }
+
+        // 你可能需要根据实际情况来包含RAWKEYBOARD结构体
+        public RAWKEYBOARD keyboard;
+
+        // ... 其他可能的输入类型
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RAWINPUTHEADER
+    {
+        public uint dwType;
+        public uint dwSize;
+        public IntPtr hDevice;
+        public IntPtr wParam;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RawInputDevice
+    {
+        public ushort usUsagePage;
+        public ushort usUsage;
+        public int dwFlags;
+        public IntPtr hwndTarget;
+    }
+
+    // // RAWINPUTHEADER结构体的定义
+    // [StructLayout(LayoutKind.Sequential)]
+    // public struct RAWINPUTHEADER
+    // {
+    //     public uint dwType;
+    //     public uint dwSize;
+    //     public IntPtr hDevice;
+    //     public IntPtr wParam;
+    // }
+
+    // RAWKEYBOARD结构体的定义（键盘输入）
+    [StructLayout(LayoutKind.Explicit)]
+    public struct RAWKEYBOARD
+    {
+        [FieldOffset(0)]
+        public RAWKEYBOARDHEADER header;
+
+        // ... 其他字段，如MakeCode, Flags, Reserved, VKey, Message等
+    }
+
+    // RAWKEYBOARDHEADER结构体的定义（键盘输入头）
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RAWKEYBOARDHEADER
+    {
+        public ushort bVKey;
+        public ushort wScan;
+        public uint dwFlags;
+        public uint dwReserved;
+        public ushort wTime;
+        public ushort dwExtraInfo;
+    }
+
+    // ... 类似地，定义RAWMOUSE等结构体
+
+    // Raw Input API函数的签名
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern uint RegisterRawInputDevices(RawInputDevice[] pRawInputDevices, uint uiNumDevices, uint cbSize);
+
+    // ... 其他Raw Input API函数的签名
+    private void RegisterRawInputDevicesForKeyboardAndMouse()
+    {
+        // 创建两个RAWINPUTDEVICE实例，一个用于键盘，一个用于鼠标
+        var keyboardDevice = new RawInputDevice
+        {
+            usUsagePage = 0x01, // HID_USAGE_PAGE_GENERIC
+            usUsage = 0x06,     // HID_USAGE_GENERIC_KEYBOARD
+            dwFlags = 0x100,    // RIDEV_INPUTSINK
+            hwndTarget = this.Handle // 指向你的窗口句柄
+        };
+
+        var mouseDevice = new RawInputDevice
+        {
+            usUsagePage = 0x01, // HID_USAGE_PAGE_GENERIC
+            usUsage = 0x02,     // HID_USAGE_GENERIC_MOUSE
+            dwFlags = 0x100,    // RIDEV_INPUTSINK
+            hwndTarget = this.Handle // 指向你的窗口句柄
+        };
+
+        // var devices = new RawInputDevice[] { keyboardDevice, mouseDevice };
+        var devices = new RawInputDevice[] { keyboardDevice };
+        var result = RegisterRawInputDevices(devices, (uint)devices.Length, (uint)Marshal.SizeOf(keyboardDevice));
+        if (result == 0)
+        {
+            // 处理错误
+            var error = Marshal.GetLastWin32Error();
+            // ...
+        }
+    }
+
+    // 处理WM_INPUT消息以获取原始输入数据
+    protected override void WndProc(ref Message m)
+    {
+        const int WM_INPUT = 0x00FF;
+        if (m.Msg == WM_INPUT)
+        {
+            Console.WriteLine($"Keyboard VKey: {m.LParam}");
+            // 获取原始输入数据的大小
+            uint dataSize = 0;
+            GetRawInputData(m.LParam, RID_INPUT, IntPtr.Zero, out dataSize, (uint)Marshal.SizeOf(typeof(RAWINPUTHEADER)));
+
+            // 分配内存来保存原始输入数据
+            IntPtr buffer = Marshal.AllocHGlobal((int)dataSize);
+            try
+            {
+                // 获取原始输入数据
+                uint result = GetRawInputData(m.LParam, RID_INPUT, buffer, out dataSize, (uint)Marshal.SizeOf(typeof(RAWINPUTHEADER)));
+                if (result == dataSize)
+                {
+                    // 将数据转换为RAWINPUT结构体
+                    RAWINPUT rawInput = (RAWINPUT)Marshal.PtrToStructure(buffer, typeof(RAWINPUT));
+
+                    // 检查是否是键盘输入
+                    if (rawInput.header.dwType == RIM_TYPEKEYBOARD)
+                    {
+                        // 提取键盘按键的虚拟键代码（VKey）
+                        ushort vKey = rawInput.keyboard.VKey;
+                        Console.WriteLine($"Keyboard VKey: {vKey}");
+
+                        // 你可以将vKey转换为实际的按键名称，但这需要一个映射表或方法
+                        // 例如，你可以使用Keys枚举中的值进行匹配（但请注意，并非所有vKey都直接对应于Keys枚举中的值）
+                    }
+                }
+                else
+                {
+                    // 处理错误
+                }
+            }
+            finally
+            {
+                // 释放内存
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+        base.WndProc(ref m);
+    }
+
+    // 导入必要的常量
+    [DllImport("user32.dll")]
+    private static extern uint GetRawInputData(IntPtr hRawInput, uint uiCommand, IntPtr pData, out uint pcbSize, uint cbSizeHeader);
+
+}
+
+
+
+namespace keyupMusic;
+using KeyboardHook;
+using System.Media;
+using System.Runtime.InteropServices;
+
+public partial class Form1 : Form
+{
+    private const int RID_INPUT = 0x1007;
+    private const int RIM_TYPEKEYBOARD = 1;
+    KeyEventHandler myKeyEventHandeler;
+    KeyEventHandler myKeyEventHandeler_down;
+    KeyboardHook k_hook = new KeyboardHook();
+    SoundPlayer player = new SoundPlayer();
+    SoundPlayer player_d = new SoundPlayer("d2.wav");
+    Keys[] keys = { Keys.D0, Keys.D1, Keys.D2, Keys.D3, Keys.D4, Keys.D5, Keys.D6, Keys.D7, Keys.D8, Keys.D9 };
+    Keys[] keys_stop = { Keys.Escape };
+    Keys[] keys_exit = { Keys.D9, Keys.D9, Keys.D0 };
+    string keys_exits = "990";
+    string keys_exitsss = "990";
+    bool keys_exitss = false;
+    DateTime dateTime = new DateTime(2000, 1, 1);
+
+    public Form1()
+    {
+        InitializeComponent();
+        startListen();
+        this.Load += new EventHandler(Form1_Load);
+        // RegisterRawInputDevicesForKeyboardAndMouse();
+    }
+
+    private void Form1_Load(object sender, EventArgs e)
+    {
+        this.WindowState = FormWindowState.Minimized;
+        SetVisibleCore(false);
+
+        MainForm_Activated(sender, e);
+    }
+
+    private void hook_KeyUp(object sender, KeyEventArgs e)
+    {
+        if (keys_exit.Contains(e.KeyCode) && is_exit(e.KeyCode))
+        {
+            if (keys_exitss)
+            {
+                player.Stop();
+                dateTime = new DateTime(2100, 1, 1);
+            }
+            else
+            {
+                dateTime = new DateTime(2000, 1, 1);
+            }
+        }
+        if (keys.Contains(e.KeyCode))
+        {
+            // pagedown_edge.yo(sender, e);
+            string wav = e.KeyCode.ToString().Replace("D", "") + ".wav";
+
+            if (DateTime.Now - dateTime < TimeSpan.FromSeconds(30)) return;
+            if (!File.Exists(wav)) return;
+
+            player = new SoundPlayer(wav);
+            player.Play();
+
+            dateTime = DateTime.Now;
+
+            new Thread(new ThreadStart(winBinWallpaper.changeImg)).Start();
+        }
+        else if (keys_stop.Contains(e.KeyCode) && dateTime < new DateTime(2099, 1, 1))
+        {
+            player.Stop();
+            dateTime = new DateTime(2000, 1, 1);
+        }
+    }
+    private void hook_KeyDown(object sender, KeyEventArgs e)
+    {
+        Console.WriteLine("1111111111111" + e.KeyValue);
+        // player_d.Play();
+        new Thread(new ThreadStart(aaaaaaaaaaa)).Start();
+    }
+    public static void aaaaaaaaaaa()
+    {
+        var asd = new SoundPlayer("d2.wav");
+        asd.Play();
+    }
+    public bool is_exit(Keys keys)
+    {
+        string number = keys.ToString().Replace("D", "");
+        keys_exitsss = (keys_exitsss + number).Substring(1, keys_exitsss.Length);
+        if (keys_exits == keys_exitsss)
+        {
+            keys_exitss = !keys_exitss;
+            return true;
+        }
+        return false;
+    }
+
+    public void startListen()
+    {
+        myKeyEventHandeler = new KeyEventHandler(hook_KeyUp);
+        myKeyEventHandeler_down = new KeyEventHandler(hook_KeyDown);
+        k_hook.KeyUpEvent += myKeyEventHandeler;
+        k_hook.KeyDownEvent += myKeyEventHandeler_down;
+        k_hook.Start();
+    }
+    public void stopListen()
+    {
+        if (myKeyEventHandeler != null)
+        {
+            k_hook.KeyUpEvent -= myKeyEventHandeler;
+            k_hook.KeyDownEvent -= myKeyEventHandeler_down;
+            myKeyEventHandeler = null;
+            k_hook.Stop();
+        }
+    }
+    protected override void Dispose(bool disposing)
+    {
+        stopListen();
+
+        if (disposing && (components != null))
+        {
+            components.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+    protected override void WndProc(ref Message m)
+    {
+        const int WM_HOTKEY = 0x0312;
+        //按快捷键 
+        switch (m.Msg)
+        {
+            case WM_HOTKEY:
+                switch (m.WParam.ToInt32())
+                {
+                    case 100:  //按下的是Ctrl+Shift+1
+                               //此处填写快捷键响应代码     
+                        Console.WriteLine("123");
+                        break;
+                    case 101:  //按下的是Ctrl+Shift+2
+                               //此处填写快捷键响应代码
+                        break;
+                    case 102:  //按下的是Ctrl+Shift+3
+                               //此处填写快捷键响应代码
+                        break;
+                    case 103:  //按下的是Alt+D
+                               //此处填写快捷键响应代码
+                        break;
+                }
+                break;
+        }
+        base.WndProc(ref m);
+    }
+    public void MainForm_Activated(object sender, EventArgs e)
+    {
+        //注册热键Ctrl+Shift+1，Id号为100。HotKey.KeyModifiers.Shift也可以直接使用数字4来表示。
+        HotKey.RegisterHotKey(Handle, 100, (int)HotKey.KeyModifiers.Ctrl + HotKey.KeyModifiers.Shift, Keys.D1);
+        //注册热键Ctrl+Shift+2，Id号为101。HotKey.KeyModifiers.Ctrl也可以直接使用数字2来表示。
+        HotKey.RegisterHotKey(Handle, 101, (int)HotKey.KeyModifiers.Ctrl + HotKey.KeyModifiers.Shift, Keys.D2);
+        //注册热键Ctrl+Shift+3，Id号为102。HotKey.KeyModifiers.Ctrl也可以直接使用数字2来表示。
+        HotKey.RegisterHotKey(Handle, 102, (int)HotKey.KeyModifiers.Ctrl + HotKey.KeyModifiers.Shift, Keys.D3);
+        //注册热键Alt+D，Id号为103。HotKey.KeyModifiers.Alt也可以直接使用数字1来表示。
+        HotKey.RegisterHotKey(Handle, 103, HotKey.KeyModifiers.Alt, Keys.D);
+    }
+    private void MainForm_FormClosed(object sender, FormClosedEventArgs e)
+    {
+        //注销Id号为100的热键设定
+        HotKey.UnregisterHotKey(Handle, 100);
+        //注销Id号为101的热键设定
+        HotKey.UnregisterHotKey(Handle, 101);// http://ike.126.com
+                                             //注销Id号为102的热键设定
+        HotKey.UnregisterHotKey(Handle, 102);
+        //注销Id号为103的热键设定
+        HotKey.UnregisterHotKey(Handle, 103);
+    }
+    public void txtHotKey_KeyDown(object sender, KeyEventArgs e)
+    {
+        int HotKeyValue = 0;
+        string HotKeyString = "";
+        e.SuppressKeyPress = false;
+        e.Handled = true;
+        if (e.Modifiers != Keys.None)
+        {
+            switch (e.Modifiers)
+            {
+                case Keys.Control:
+                    HotKeyString += "Ctrl + ";
+                    HotKeyValue = (int)e.Modifiers;
+                    break;
+                case Keys.Alt:
+                    HotKeyString += "Alt + ";
+                    HotKeyValue = (int)e.Modifiers;
+                    break;
+                case Keys.Shift:
+                    HotKeyString += "Shift + ";
+                    HotKeyValue = (int)e.Modifiers;
+                    break;
+                case Keys.Control | Keys.Alt:
+                    HotKeyString += "Ctrl + Alt + ";
+                    HotKeyValue = (int)e.Modifiers;
+                    break;
+                case Keys.Control | Keys.Shift:
+                    HotKeyString += "Ctrl + Shift + ";
+                    HotKeyValue = (int)e.Modifiers;
+                    break;
+                case Keys.Alt | Keys.Shift:
+                    HotKeyString += "Alt + Shift + ";
+                    HotKeyValue = (int)e.Modifiers;
+                    break;
+                case Keys.Control | Keys.Alt | Keys.Shift:
+                    HotKeyString += "Ctrl + Alt + Shift + ";
+                    HotKeyValue = (int)e.Modifiers;
+                    break;
+            }
+            if (e.KeyCode != Keys.None && e.KeyCode != Keys.ControlKey && e.KeyCode != Keys.Menu && e.KeyCode != Keys.ShiftKey)
+            {
+                HotKeyString += KeyCodeToString(e.KeyCode);
+                HotKeyValue += (int)e.KeyCode;
+            }
+        }
+        else
+        {
+            if (e.KeyCode == Keys.Delete || e.KeyCode == Keys.Back)
+            {
+                HotKeyString = "无";
+                HotKeyValue = -1;
+            }
+            else if (e.KeyCode != Keys.None)
+            {
+                HotKeyString = KeyCodeToString(e.KeyCode);
+                HotKeyValue = (int)e.KeyCode;
+            }
+        }
+        if (HotKeyValue == 0)
+            HotKeyValue = -1;
+        TextBox txtHotKey = (TextBox)sender;
+        txtHotKey.Text = HotKeyString;
+        txtHotKey.Tag = HotKeyValue;
+        txtHotKey.SelectionStart = txtHotKey.Text.Length;
+    }
+    ///
+    /// 将按键转换成相应字符
+    ///
+    /// 按键
+    /// 字符
+    public string KeyCodeToString(Keys KeyCode)
+    {
+        if (KeyCode >= Keys.D0 && KeyCode <= Keys.D9)
+        {
+            return KeyCode.ToString().Remove(0, 1);
+        }
+        else if (KeyCode >= Keys.NumPad0 && KeyCode <= Keys.NumPad9)
+        {
+            return KeyCode.ToString().Replace("Pad", "");
+        }
+        else
+        {
+            return KeyCode.ToString();
+        }
+    }
+    ///
+    /// 设置按键不响应
+    ///
+    public void txtHotKey_KeyPress(object sender, KeyPressEventArgs e)
+    {
+        e.Handled = true;
+    }
+    ///
+    /// 释放按键后，若是无实际功能键，则置无
+    ///
+    public void txtHotKey_KeyUp(object sender, KeyEventArgs e)
+    {
+        CheckHotkey(sender);
+    }
+    ///
+    /// 失去焦点后，若是无实际功能键，则置无
+    ///
+    public void txtHotKey_LostFocus(object sender, EventArgs e)
+    {
+        CheckHotkey(sender);
+    }
+    ///
+    /// 检查是否无实际功能键，是则置无
+    ///
+    public void CheckHotkey(object sender)
+    {
+        TextBox txtHotKey = (TextBox)sender;
+        if (txtHotKey.Text.EndsWith(" + ") || String.IsNullOrEmpty(txtHotKey.Text))
+        {
+            txtHotKey.Text = "无";
+            txtHotKey.Tag = -1;
+            txtHotKey.SelectionStart = txtHotKey.Text.Length;
+        }
+    }
+}
+
+
+
+namespace keyupMusic;
+using KeyboardHook;
+using System.Media;
+using System.Runtime.InteropServices;
+
+public partial class Form1 : Form
+{
+    private const int RID_INPUT = 0x1007;
+    private const int RIM_TYPEKEYBOARD = 1;
+    KeyEventHandler myKeyEventHandeler;
+    KeyEventHandler myKeyEventHandeler_down;
+    KeyboardHook k_hook = new KeyboardHook();
+    SoundPlayer player = new SoundPlayer();
+    SoundPlayer player_d = new SoundPlayer("d2.wav");
+    Keys[] keys = { Keys.D0, Keys.D1, Keys.D2, Keys.D3, Keys.D4, Keys.D5, Keys.D6, Keys.D7, Keys.D8, Keys.D9 };
+    Keys[] keys_stop = { Keys.Escape };
+    Keys[] keys_exit = { Keys.D9, Keys.D9, Keys.D0 };
+    string keys_exits = "990";
+    string keys_exitsss = "990";
+    bool keys_exitss = false;
+    DateTime dateTime = new DateTime(2000, 1, 1);
+
+    public Form1()
+    {
+        InitializeComponent();
+        startListen();
+        this.Load += new EventHandler(Form1_Load);
+        // RegisterRawInputDevicesForKeyboardAndMouse();
+    }
+
+    private void Form1_Load(object sender, EventArgs e)
+    {
+        this.WindowState = FormWindowState.Minimized;
+        SetVisibleCore(false);
+
+        MainForm_Activated(sender, e);
+    }
+
+    private void hook_KeyUp(object sender, KeyEventArgs e)
+    {
+        if (keys_exit.Contains(e.KeyCode) && is_exit(e.KeyCode))
+        {
+            if (keys_exitss)
+            {
+                player.Stop();
+                dateTime = new DateTime(2100, 1, 1);
+            }
+            else
+            {
+                dateTime = new DateTime(2000, 1, 1);
+            }
+        }
+        if (keys.Contains(e.KeyCode))
+        {
+            // pagedown_edge.yo(sender, e);
+            string wav = e.KeyCode.ToString().Replace("D", "") + ".wav";
+
+            if (DateTime.Now - dateTime < TimeSpan.FromSeconds(30)) return;
+            if (!File.Exists(wav)) return;
+
+            player = new SoundPlayer(wav);
+            player.Play();
+
+            dateTime = DateTime.Now;
+
+            new Thread(new ThreadStart(winBinWallpaper.changeImg)).Start();
+        }
+        else if (keys_stop.Contains(e.KeyCode) && dateTime < new DateTime(2099, 1, 1))
+        {
+            player.Stop();
+            dateTime = new DateTime(2000, 1, 1);
+        }
+    }
+    private void hook_KeyDown(object sender, KeyEventArgs e)
+    {
+        Console.WriteLine("1111111111111" + e.KeyValue);
+        // player_d.Play();
+        new Thread(new ThreadStart(aaaaaaaaaaa)).Start();
+    }
+    public static void aaaaaaaaaaa()
+    {
+        var asd = new SoundPlayer("d2.wav");
+        asd.Play();
+    }
+    public bool is_exit(Keys keys)
+    {
+        string number = keys.ToString().Replace("D", "");
+        keys_exitsss = (keys_exitsss + number).Substring(1, keys_exitsss.Length);
+        if (keys_exits == keys_exitsss)
+        {
+            keys_exitss = !keys_exitss;
+            return true;
+        }
+        return false;
+    }
+
+    public void startListen()
+    {
+        myKeyEventHandeler = new KeyEventHandler(hook_KeyUp);
+        myKeyEventHandeler_down = new KeyEventHandler(hook_KeyDown);
+        k_hook.KeyUpEvent += myKeyEventHandeler;
+        k_hook.KeyDownEvent += myKeyEventHandeler_down;
+        k_hook.Start();
+    }
+    public void stopListen()
+    {
+        if (myKeyEventHandeler != null)
+        {
+            k_hook.KeyUpEvent -= myKeyEventHandeler;
+            k_hook.KeyDownEvent -= myKeyEventHandeler_down;
+            myKeyEventHandeler = null;
+            k_hook.Stop();
+        }
+    }
+    protected override void Dispose(bool disposing)
+    {
+        stopListen();
+
+        if (disposing && (components != null))
+        {
+            components.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+    protected override void WndProc(ref Message m)
+    {
+        const int WM_HOTKEY = 0x0312;
+        //按快捷键 
+        switch (m.Msg)
+        {
+            case WM_HOTKEY:
+                switch (m.WParam.ToInt32())
+                {
+                    case 100:  //按下的是Ctrl+Shift+1
+                               //此处填写快捷键响应代码     
+                        Console.WriteLine("123");
+                        break;
+                    case 101:  //按下的是Ctrl+Shift+2
+                               //此处填写快捷键响应代码
+                        break;
+                    case 102:  //按下的是Ctrl+Shift+3
+                               //此处填写快捷键响应代码
+                        break;
+                    case 103:  //按下的是Alt+D
+                               //此处填写快捷键响应代码
+                        break;
+                }
+                break;
+        }
+        base.WndProc(ref m);
+    }
+    public void MainForm_Activated(object sender, EventArgs e)
+    {
+        //注册热键Ctrl+Shift+1，Id号为100。HotKey.KeyModifiers.Shift也可以直接使用数字4来表示。
+        HotKey.RegisterHotKey(Handle, 100, (int)HotKey.KeyModifiers.Ctrl + HotKey.KeyModifiers.Shift, Keys.D1);
+        //注册热键Ctrl+Shift+2，Id号为101。HotKey.KeyModifiers.Ctrl也可以直接使用数字2来表示。
+        HotKey.RegisterHotKey(Handle, 101, (int)HotKey.KeyModifiers.Ctrl + HotKey.KeyModifiers.Shift, Keys.D2);
+        //注册热键Ctrl+Shift+3，Id号为102。HotKey.KeyModifiers.Ctrl也可以直接使用数字2来表示。
+        HotKey.RegisterHotKey(Handle, 102, (int)HotKey.KeyModifiers.Ctrl + HotKey.KeyModifiers.Shift, Keys.D3);
+        //注册热键Alt+D，Id号为103。HotKey.KeyModifiers.Alt也可以直接使用数字1来表示。
+        HotKey.RegisterHotKey(Handle, 103, HotKey.KeyModifiers.Alt, Keys.D);
+    }
+    private void MainForm_FormClosed(object sender, FormClosedEventArgs e)
+    {
+        //注销Id号为100的热键设定
+        HotKey.UnregisterHotKey(Handle, 100);
+        //注销Id号为101的热键设定
+        HotKey.UnregisterHotKey(Handle, 101);// http://ike.126.com
+                                             //注销Id号为102的热键设定
+        HotKey.UnregisterHotKey(Handle, 102);
+        //注销Id号为103的热键设定
+        HotKey.UnregisterHotKey(Handle, 103);
+    }
+    public void txtHotKey_KeyDown(object sender, KeyEventArgs e)
+    {
+        int HotKeyValue = 0;
+        string HotKeyString = "";
+        e.SuppressKeyPress = false;
+        e.Handled = true;
+        if (e.Modifiers != Keys.None)
+        {
+            switch (e.Modifiers)
+            {
+                case Keys.Control:
+                    HotKeyString += "Ctrl + ";
+                    HotKeyValue = (int)e.Modifiers;
+                    break;
+                case Keys.Alt:
+                    HotKeyString += "Alt + ";
+                    HotKeyValue = (int)e.Modifiers;
+                    break;
+                case Keys.Shift:
+                    HotKeyString += "Shift + ";
+                    HotKeyValue = (int)e.Modifiers;
+                    break;
+                case Keys.Control | Keys.Alt:
+                    HotKeyString += "Ctrl + Alt + ";
+                    HotKeyValue = (int)e.Modifiers;
+                    break;
+                case Keys.Control | Keys.Shift:
+                    HotKeyString += "Ctrl + Shift + ";
+                    HotKeyValue = (int)e.Modifiers;
+                    break;
+                case Keys.Alt | Keys.Shift:
+                    HotKeyString += "Alt + Shift + ";
+                    HotKeyValue = (int)e.Modifiers;
+                    break;
+                case Keys.Control | Keys.Alt | Keys.Shift:
+                    HotKeyString += "Ctrl + Alt + Shift + ";
+                    HotKeyValue = (int)e.Modifiers;
+                    break;
+            }
+            if (e.KeyCode != Keys.None && e.KeyCode != Keys.ControlKey && e.KeyCode != Keys.Menu && e.KeyCode != Keys.ShiftKey)
+            {
+                HotKeyString += KeyCodeToString(e.KeyCode);
+                HotKeyValue += (int)e.KeyCode;
+            }
+        }
+        else
+        {
+            if (e.KeyCode == Keys.Delete || e.KeyCode == Keys.Back)
+            {
+                HotKeyString = "无";
+                HotKeyValue = -1;
+            }
+            else if (e.KeyCode != Keys.None)
+            {
+                HotKeyString = KeyCodeToString(e.KeyCode);
+                HotKeyValue = (int)e.KeyCode;
+            }
+        }
+        if (HotKeyValue == 0)
+            HotKeyValue = -1;
+        TextBox txtHotKey = (TextBox)sender;
+        txtHotKey.Text = HotKeyString;
+        txtHotKey.Tag = HotKeyValue;
+        txtHotKey.SelectionStart = txtHotKey.Text.Length;
+    }
+    ///
+    /// 将按键转换成相应字符
+    ///
+    /// 按键
+    /// 字符
+    public string KeyCodeToString(Keys KeyCode)
+    {
+        if (KeyCode >= Keys.D0 && KeyCode <= Keys.D9)
+        {
+            return KeyCode.ToString().Remove(0, 1);
+        }
+        else if (KeyCode >= Keys.NumPad0 && KeyCode <= Keys.NumPad9)
+        {
+            return KeyCode.ToString().Replace("Pad", "");
+        }
+        else
+        {
+            return KeyCode.ToString();
+        }
+    }
+    ///
+    /// 设置按键不响应
+    ///
+    public void txtHotKey_KeyPress(object sender, KeyPressEventArgs e)
+    {
+        e.Handled = true;
+    }
+    ///
+    /// 释放按键后，若是无实际功能键，则置无
+    ///
+    public void txtHotKey_KeyUp(object sender, KeyEventArgs e)
+    {
+        CheckHotkey(sender);
+    }
+    ///
+    /// 失去焦点后，若是无实际功能键，则置无
+    ///
+    public void txtHotKey_LostFocus(object sender, EventArgs e)
+    {
+        CheckHotkey(sender);
+    }
+    ///
+    /// 检查是否无实际功能键，是则置无
+    ///
+    public void CheckHotkey(object sender)
+    {
+        TextBox txtHotKey = (TextBox)sender;
+        if (txtHotKey.Text.EndsWith(" + ") || String.IsNullOrEmpty(txtHotKey.Text))
+        {
+            txtHotKey.Text = "无";
+            txtHotKey.Tag = -1;
+            txtHotKey.SelectionStart = txtHotKey.Text.Length;
+        }
+    }
+}

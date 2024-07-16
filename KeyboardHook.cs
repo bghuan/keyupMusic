@@ -92,6 +92,7 @@ namespace KeyboardHook
                     Keys keyData = (Keys)MyKeyboardHookStruct.vkCode;
                     KeyEventArgs e = new KeyEventArgs(keyData);
                     KeyDownEvent(this, e);
+                    Console.WriteLine("KeyDownEvent" + e.KeyValue);
                 }
                 if (KeyPressEvent != null && wParam == WM_KEYDOWN)
                 {
@@ -110,6 +111,7 @@ namespace KeyboardHook
                     Keys keyData = (Keys)MyKeyboardHookStruct.vkCode;
                     KeyEventArgs e = new KeyEventArgs(keyData);
                     KeyUpEvent(this, e);
+                    Console.WriteLine("KeyUpEvent" + e.KeyValue);
                 }
 
             }

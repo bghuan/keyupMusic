@@ -7,6 +7,7 @@ namespace keyupMusic
     public class winBinWallpaper
     {
         static string picUrl = "https://bghuan.cn/api/bing.php";
+        static bool changing = false;
         static void Main1111(string[] args)
         {
             changeImg();
@@ -16,7 +17,9 @@ namespace keyupMusic
         {
             string savePath = Directory.GetCurrentDirectory() + "\\" + DateTime.Now.ToString("yyyyMMdd") + ".jpg";
             if (File.Exists(savePath)) return;
+            if (changing) return;
 
+            changing = true;
             System.Net.ServicePointManager.SecurityProtocol = (SecurityProtocolType)(0xc0 | 0x300 | 0xc00);
             string value = String.Empty;
             WebResponse response = null;
@@ -35,6 +38,7 @@ namespace keyupMusic
             {
                 if (stream != null) stream.Close();
                 if (response != null) response.Close();
+                changing = false;
             }
 
 
@@ -59,6 +63,7 @@ namespace keyupMusic
             {
                 Console.WriteLine("not exist");
             }
+            changing = false;
         }
 
         public class WinAPI
